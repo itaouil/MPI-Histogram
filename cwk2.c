@@ -26,7 +26,12 @@
 //
 int main( int argc, char **argv )
 {
+	// Initialise counter index
 	int i;
+
+	// Initialise local processes' variables
+	int *localImage = NULL;
+	int *localHist = NULL;
 
 	// Initialise MPI and get the rank and no. of processes.
 	int rank, numProcs;
@@ -63,14 +68,44 @@ int main( int argc, char **argv )
  		for( i=0; i<maxValue+1; i++ ) combinedHist[i] = 0;
  	}
 
+	// Broadcast pixelsPerProc and maxValue data
+	// to all the processes
+	MPI_Bcast(&pixelsPerProc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
+	// Allocate localImage per process
+	localImage = (int*) malloc(sizeof(int) * pixelsPerProc);
 
-	//
-	// Your parallel code goes here. Feel free to change anything else in this file,
-	// EXCEPT calls to the routines in cwk2_extras.h which MUST be called as provided.
-	//
+	// Allocate localHist per process
+	localHist = (int*) malloc(sizeof(int) * (maxValue +  1));
 
+	// Scatter image portions to processes
+	MPI_Scatter(
+	    image,
+	    pixelsPerProc,
+	    MPI_INT,
+	    localImage,
+	    pixelsPerProc,
+	    MPI_INT,
+	    0,
+	    MPI_COMM_WORLD
+	);
 
+	// Increase localHist counter
+	for(i=0; i<pixelsPerProc; i++) {
+		localHist[localImage[i]] += 1;
+	}
+
+	// Send back localHist to combinedHist
+	MPI_Reduce(
+		localHist,
+		combinedHist,
+		maxValue+1,
+		MPI_INT,
+		MPI_SUM,
+		0,
+        MPI_COMM_WORLD
+	);
 
 	//
 	// Constructs the histogram in serial on rank 0. Can be used as part of a check that your parallel version works.
@@ -92,7 +127,6 @@ int main( int argc, char **argv )
 
 		free( checkHist );
 	}
-
 
 	//
 	// Clear up and quit.
