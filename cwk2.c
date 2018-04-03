@@ -29,10 +29,6 @@ int main( int argc, char **argv )
 	// Initialise counter index
 	int i;
 
-	// Initialise local processes' variables
-	int *localImage = NULL;
-	int *localHist = NULL;
-
 	// Initialise MPI and get the rank and no. of processes.
 	int rank, numProcs;
 	MPI_Init( &argc, &argv );
@@ -73,6 +69,10 @@ int main( int argc, char **argv )
 	MPI_Bcast(&pixelsPerProc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
+	// Initialise local processes' variables
+	int *localHist = NULL;
+	int *localImage = NULL;
+
 	// Allocate localImage per process
 	localImage = (int*) malloc(sizeof(int) * pixelsPerProc);
 
@@ -92,20 +92,69 @@ int main( int argc, char **argv )
 	);
 
 	// Increase localHist counter
-	for(i=0; i<pixelsPerProc; i++) {
+	for(i=0; i<pixelsPerProc; i++)
+	{
 		localHist[localImage[i]] += 1;
 	}
 
-	// Send back localHist to combinedHist
-	MPI_Reduce(
-		localHist,
-		combinedHist,
-		maxValue+1,
-		MPI_INT,
-		MPI_SUM,
-		0,
-        MPI_COMM_WORLD
-	);
+	// Intial level and jump
+	int lev=1;
+	int jump=1;
+	// int doubleJump = jump * 2;
+	int maxProc = numProcs - 1;
+
+	while(1<<lev<=numProcs)
+	{
+
+		if (lev==1) {
+			if (rank % 2 != 0 && rank != 0) {
+				printf("Sending from %d to %d\n", rank, rank-jump);
+			}
+			else {
+				printf("%d receives from %d\n", rank, rank+jump);
+			}
+		}
+
+		else {
+			if (rank % 2 == 0) {
+				if (rank != 0 && ((maxProc - rank) % jump) == 0) {
+					printf("Sending from %d to %d\n", rank, rank-jump);
+				}
+				else {
+					// printf("%d receives from %d\n", rank, rank+jump);
+				}
+			}
+		}
+
+		// if ((maxProc - rank) % jump) {
+		// 	/* code */
+		// }
+
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		// Decrease maxProc
+		maxProc -= jump;
+
+		// Increase doubleJump
+		// doubleJump = 2 * jump;
+
+		// Increase the jump
+		jump *= 2;
+
+		// Increase level
+		lev++;
+	}
+
+	// // Send back localHist to combinedHist
+	// MPI_Reduce(
+	// 	localHist,
+	// 	combinedHist,
+	// 	maxValue+1,
+	// 	MPI_INT,
+	// 	MPI_SUM,
+	// 	0,
+    //     MPI_COMM_WORLD
+	// );
 
 	//
 	// Constructs the histogram in serial on rank 0. Can be used as part of a check that your parallel version works.
@@ -122,8 +171,8 @@ int main( int argc, char **argv )
 			if( image[i]>=0 ) checkHist[image[i]]++;
 
 		// Display the histgram.
-		for( i=0; i<maxValue+1; i++ )
-			printf( "Greyscale value %i:\tCount %i\t(check: %i)\n", i, combinedHist[i], checkHist[i] );
+		// for( i=0; i<maxValue+1; i++ )
+			// printf( "Greyscale value %i:\tCount %i\t(check: %i)\n", i, combinedHist[i], checkHist[i] );
 
 		free( checkHist );
 	}
