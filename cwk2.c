@@ -8,7 +8,6 @@
 // or use the provided makefile.
 //
 
-
 //
 // Includes
 //
@@ -19,7 +18,6 @@
 // Some extra routines for this coursework. DO NOT MODIFY OR REPLACE THESE ROUTINES,
 // as this file will be replaced with a different version for assessment.
 #include "cwk2_extras.h"
-
 
 //
 // Main
@@ -34,6 +32,9 @@ int main( int argc, char **argv )
 	MPI_Init( &argc, &argv );
 	MPI_Comm_size( MPI_COMM_WORLD, &numProcs );
 	MPI_Comm_rank( MPI_COMM_WORLD, &rank     );
+
+	// MPI status
+	MPI_Status status;
 
 	// Read in the image file to rank 0.
 	int *image = NULL, maxValue, pixelsPerProc, dataSize;
@@ -69,15 +70,9 @@ int main( int argc, char **argv )
 	MPI_Bcast(&pixelsPerProc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	// Initialise local processes' variables
-	int *localHist = NULL;
-	int *localImage = NULL;
-
-	// Allocate localImage per process
-	localImage = (int*) malloc(sizeof(int) * pixelsPerProc);
-
-	// Allocate localHist per process
-	localHist = (int*) malloc(sizeof(int) * (maxValue +  1));
+	// Allocate localImage and localHist per process
+	int *localImage = (int*) malloc(sizeof(int) * pixelsPerProc);
+	int *localHist = (int*) malloc(sizeof(int) * (maxValue +  1));
 
 	// Scatter image portions to processes
 	MPI_Scatter(
@@ -115,61 +110,61 @@ int main( int argc, char **argv )
 	// which serves as boundary checking for the
 	// sender processes.
 	int lev=1;
-	int jump=numProcs/2;
-	int prevSplit = numProcs;
+	int activeProcs=numProcs;
 
-	// Intialise space for remoreHist (sent one)
+	// Storage for received data
 	int *remoteHist = NULL;
-
-	// Allocate localHist per process
-	remoteHist = (int*) malloc(sizeof(int) * (maxValue +  1));
 
 	while(1<<lev<=numProcs)
 	{
 
 		// Send localHist if rank is qualified for sending
-		if (rank >= numProcs/(lev*2) && rank < prevSplit) {
+		if (rank >= activeProcs/2 && rank < numProcs) {
 			MPI_Send(
 			    localHist,
 			    maxValue+1,
 			    MPI_INT,
-			    rank-jump,
+			    rank-(activeProcs/2),
 			    0,
 			    MPI_COMM_WORLD
 			);
-
 		}
 
 		// Receive remoteHist if rank is qualified for receiving
-		else if (rank < numProcs/(lev*2)) {
+		else if (rank < activeProcs/2) {
+			// Allocate space for remoteHist
+			remoteHist = (int*) malloc(sizeof(int) * (maxValue +  1));
+
 			MPI_Recv(
 			    remoteHist,
 			    maxValue+1,
 			    MPI_INT,
-			    rank+jump,
+			    rank+(activeProcs/2),
 			    0,
 			    MPI_COMM_WORLD,
 				MPI_STATUS_IGNORE
 			);
 
 			// Compute new localHist
-			for(i=0; i<maxValue; i++)
+			for(i=0; i<maxValue+1; i++)
 			{
 				localHist[i] += remoteHist[i];
 			}
 		}
 
-		MPI_Barrier(MPI_COMM_WORLD);
-
-		// Update jump
-		jump /= 2;
-
-		// Update prevSplit
-		prevSplit = numProcs/(lev*2);
+		// Update activeProcs
+		activeProcs /= 2;
 
 		// Update level
 		lev++;
 	}
+
+	if (rank != 0) {
+		free(localHist);
+	}
+
+	free(remoteHist);
+	free(localImage);
 
 	//
 	// Constructs the histogram in serial on rank 0. Can be used as part of a check that your parallel version works.
@@ -177,7 +172,12 @@ int main( int argc, char **argv )
 	if( rank==0 )
 	{
 		// Copy over localHist to combinedHist
-		combinedHist = localHist;
+		for(i=0; i<maxValue+1; i++)
+		{
+			combinedHist[i] += localHist[i];
+		}
+
+		free(localHist);
 
 		// Allocate memory for the check histogram, and then initialise it to zero.
 		int *checkHist = (int*) malloc( (maxValue+1)*sizeof(int) );
