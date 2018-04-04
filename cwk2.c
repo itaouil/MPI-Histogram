@@ -97,53 +97,53 @@ int main( int argc, char **argv )
 		localHist[localImage[i]] += 1;
 	}
 
-	// Intial level and jump
-	int lev=1;
-	int jump=1;
-	// int doubleJump = jump * 2;
-	int maxProc = numProcs - 1;
-
-	while(1<<lev<=numProcs)
-	{
-
-		if (lev==1) {
-			if (rank % 2 != 0 && rank != 0) {
-				printf("Sending from %d to %d\n", rank, rank-jump);
-			}
-			else {
-				printf("%d receives from %d\n", rank, rank+jump);
-			}
-		}
-
-		else {
-			if (rank % 2 == 0) {
-				if (rank != 0 && ((maxProc - rank) % jump) == 0) {
-					printf("Sending from %d to %d\n", rank, rank-jump);
-				}
-				else {
-					// printf("%d receives from %d\n", rank, rank+jump);
-				}
-			}
-		}
-
-		// if ((maxProc - rank) % jump) {
-		// 	/* code */
-		// }
-
-		MPI_Barrier(MPI_COMM_WORLD);
-
-		// Decrease maxProc
-		maxProc -= jump;
-
-		// Increase doubleJump
-		// doubleJump = 2 * jump;
-
-		// Increase the jump
-		jump *= 2;
-
-		// Increase level
-		lev++;
-	}
+	// // Intial level and jump
+	// int lev=1;
+	// int jump=1;
+	// // int doubleJump = jump * 2;
+	// int maxProc = numProcs - 1;
+	//
+	// while(1<<lev<=numProcs)
+	// {
+	//
+	// 	if (lev==1) {
+	// 		if (rank % 2 != 0 && rank != 0) {
+	// 			printf("Sending from %d to %d\n", rank, rank-jump);
+	// 		}
+	// 		else {
+	// 			printf("%d receives from %d\n", rank, rank+jump);
+	// 		}
+	// 	}
+	//
+	// 	else {
+	// 		if (rank % 2 == 0) {
+	// 			if (rank != 0 && ((maxProc - rank) % jump) == 0) {
+	// 				printf("Sending from %d to %d\n", rank, rank-jump);
+	// 			}
+	// 			else {
+	// 				// printf("%d receives from %d\n", rank, rank+jump);
+	// 			}
+	// 		}
+	// 	}
+	//
+	// 	// if ((maxProc - rank) % jump) {
+	// 	// 	/* code */
+	// 	// }
+	//
+	// 	MPI_Barrier(MPI_COMM_WORLD);
+	//
+	// 	// Decrease maxProc
+	// 	maxProc -= jump;
+	//
+	// 	// Increase doubleJump
+	// 	// doubleJump = 2 * jump;
+	//
+	// 	// Increase the jump
+	// 	jump *= 2;
+	//
+	// 	// Increase level
+	// 	lev++;
+	// }
 
 	// // Send back localHist to combinedHist
 	// MPI_Reduce(
@@ -155,6 +155,29 @@ int main( int argc, char **argv )
 	// 	0,
     //     MPI_COMM_WORLD
 	// );
+
+	// Intial level and jump
+	int lev=1;
+	int jump = numProcs/2;
+
+	while(1<<lev<=numProcs)
+	{
+
+		if (rank >= numProcs/(lev*2)) {
+			printf("Rank %d sending to %d\n", rank, rank - jump);
+		}
+		else {
+			printf("Rank %d receives from %d\n", rank, rank + jump);
+		}
+
+		MPI_Barrier(MPI_COMM_WORLD);
+
+		// Update jump
+		jump /= 2;
+
+		// Update level
+		lev++;
+	}
 
 	//
 	// Constructs the histogram in serial on rank 0. Can be used as part of a check that your parallel version works.
