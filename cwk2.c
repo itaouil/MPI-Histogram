@@ -97,54 +97,6 @@ int main( int argc, char **argv )
 		localHist[localImage[i]] += 1;
 	}
 
-	// // Intial level and jump
-	// int lev=1;
-	// int jump=1;
-	// // int doubleJump = jump * 2;
-	// int maxProc = numProcs - 1;
-	//
-	// while(1<<lev<=numProcs)
-	// {
-	//
-	// 	if (lev==1) {
-	// 		if (rank % 2 != 0 && rank != 0) {
-	// 			printf("Sending from %d to %d\n", rank, rank-jump);
-	// 		}
-	// 		else {
-	// 			printf("%d receives from %d\n", rank, rank+jump);
-	// 		}
-	// 	}
-	//
-	// 	else {
-	// 		if (rank % 2 == 0) {
-	// 			if (rank != 0 && ((maxProc - rank) % jump) == 0) {
-	// 				printf("Sending from %d to %d\n", rank, rank-jump);
-	// 			}
-	// 			else {
-	// 				// printf("%d receives from %d\n", rank, rank+jump);
-	// 			}
-	// 		}
-	// 	}
-	//
-	// 	// if ((maxProc - rank) % jump) {
-	// 	// 	/* code */
-	// 	// }
-	//
-	// 	MPI_Barrier(MPI_COMM_WORLD);
-	//
-	// 	// Decrease maxProc
-	// 	maxProc -= jump;
-	//
-	// 	// Increase doubleJump
-	// 	// doubleJump = 2 * jump;
-	//
-	// 	// Increase the jump
-	// 	jump *= 2;
-	//
-	// 	// Increase level
-	// 	lev++;
-	// }
-
 	// // Send back localHist to combinedHist
 	// MPI_Reduce(
 	// 	localHist,
@@ -156,19 +108,55 @@ int main( int argc, char **argv )
     //     MPI_COMM_WORLD
 	// );
 
-	// Intial level and jump
+	// Intialise the starting
+	// point of the binary communication
+	// the jump that the sending process
+	// does to send the data and the prevSplit
+	// which serves as boundary checking for the
+	// sender processes.
 	int lev=1;
 	int jump=numProcs/2;
 	int prevSplit = numProcs;
 
+	// Intialise space for remoreHist (sent one)
+	int *remoteHist = NULL;
+
+	// Allocate localHist per process
+	remoteHist = (int*) malloc(sizeof(int) * (maxValue +  1));
+
 	while(1<<lev<=numProcs)
 	{
 
+		// Send localHist if rank is qualified for sending
 		if (rank >= numProcs/(lev*2) && rank < prevSplit) {
-			printf("Rank %d sending to %d\n", rank, rank - jump);
+			MPI_Send(
+			    localHist,
+			    maxValue+1,
+			    MPI_INT,
+			    rank-jump,
+			    0,
+			    MPI_COMM_WORLD
+			);
+
 		}
-		else {
-			// printf("Rank %d receives from %d\n", rank, rank + jump);
+
+		// Receive remoteHist if rank is qualified for receiving
+		else if (rank < numProcs/(lev*2)) {
+			MPI_Recv(
+			    remoteHist,
+			    maxValue+1,
+			    MPI_INT,
+			    rank+jump,
+			    0,
+			    MPI_COMM_WORLD,
+				MPI_STATUS_IGNORE
+			);
+
+			// Compute new localHist
+			for(i=0; i<maxValue; i++)
+			{
+				localHist[i] += remoteHist[i];
+			}
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -181,7 +169,6 @@ int main( int argc, char **argv )
 
 		// Update level
 		lev++;
-		printf("\n");
 	}
 
 	//
@@ -189,6 +176,9 @@ int main( int argc, char **argv )
 	//
 	if( rank==0 )
 	{
+		// Copy over localHist to combinedHist
+		combinedHist = localHist;
+
 		// Allocate memory for the check histogram, and then initialise it to zero.
 		int *checkHist = (int*) malloc( (maxValue+1)*sizeof(int) );
 		if( !checkHist ) return allocateFail( "histogram for checking", rank );
@@ -199,8 +189,8 @@ int main( int argc, char **argv )
 			if( image[i]>=0 ) checkHist[image[i]]++;
 
 		// Display the histgram.
-		// for( i=0; i<maxValue+1; i++ )
-			// printf( "Greyscale value %i:\tCount %i\t(check: %i)\n", i, combinedHist[i], checkHist[i] );
+		for( i=0; i<maxValue+1; i++ )
+			printf( "Greyscale value %i:\tCount %i\t(check: %i)\n", i, combinedHist[i], checkHist[i] );
 
 		free( checkHist );
 	}
