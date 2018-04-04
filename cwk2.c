@@ -158,16 +158,17 @@ int main( int argc, char **argv )
 
 	// Intial level and jump
 	int lev=1;
-	int jump = numProcs/2;
+	int jump=numProcs/2;
+	int prevSplit = numProcs;
 
 	while(1<<lev<=numProcs)
 	{
 
-		if (rank >= numProcs/(lev*2)) {
+		if (rank >= numProcs/(lev*2) && rank < prevSplit) {
 			printf("Rank %d sending to %d\n", rank, rank - jump);
 		}
 		else {
-			printf("Rank %d receives from %d\n", rank, rank + jump);
+			// printf("Rank %d receives from %d\n", rank, rank + jump);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
@@ -175,8 +176,12 @@ int main( int argc, char **argv )
 		// Update jump
 		jump /= 2;
 
+		// Update prevSplit
+		prevSplit = numProcs/(lev*2);
+
 		// Update level
 		lev++;
+		printf("\n");
 	}
 
 	//
