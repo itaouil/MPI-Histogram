@@ -65,18 +65,17 @@ int main( int argc, char **argv )
  		for( i=0; i<maxValue+1; i++ ) combinedHist[i] = 0;
  	}
 
-	// Broadcast pixelsPerProc and maxValue data
-	// to all the processes
+	// Broadcast pixelsPerProc and maxValue to all the processes
 	MPI_Bcast(&pixelsPerProc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&maxValue, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	// Allocate localImage and localHist per process
+	// Allocate localImage and localHist for each process
 	int *localImage = (int*) malloc(sizeof(int) * pixelsPerProc);
 	int *localHist = (int*) malloc(sizeof(int) * (maxValue +  1));
 
-	// Scatter image portions to processes
-	MPI_Scatter(
-	    image,
+	// Distribute image's pixels
+	// to the available processes
+	MPI_Scatter(image,
 	    pixelsPerProc,
 	    MPI_INT,
 	    localImage,
@@ -86,7 +85,8 @@ int main( int argc, char **argv )
 	    MPI_COMM_WORLD
 	);
 
-	// Increase localHist counter
+	// Copy image's portion received
+	// to the localHist
 	for(i=0; i<pixelsPerProc; i++)
 	{
 		localHist[localImage[i]] += 1;
@@ -103,16 +103,15 @@ int main( int argc, char **argv )
     //     MPI_COMM_WORLD
 	// );
 
-	// Intialise the starting
-	// point of the binary communication
-	// the jump that the sending process
-	// does to send the data and the prevSplit
-	// which serves as boundary checking for the
-	// sender processes.
+	// Point to point communication states,
+	// the initial level tree and the number
+	// of active processes (involved in the computation)
+	// at each time.
 	int lev=1;
-	int activeProcs=numProcs;
+	int activeProcs = numProcs;
 
-	// Storage for received data
+	// Declare remoteHist which
+	// stores point to point data
 	int *remoteHist = NULL;
 
 	while(1<<lev<=numProcs)
@@ -132,7 +131,7 @@ int main( int argc, char **argv )
 
 		// Receive remoteHist if rank is qualified for receiving
 		else if (rank < activeProcs/2) {
-			// Allocate space for remoteHist
+			// Allocate space for remoteHist (only allocated for receivers)
 			remoteHist = (int*) malloc(sizeof(int) * (maxValue +  1));
 
 			MPI_Recv(
@@ -159,6 +158,9 @@ int main( int argc, char **argv )
 		lev++;
 	}
 
+	// Do not free rank0 localHist
+	// as it still needed for final
+	// computation
 	if (rank != 0) {
 		free(localHist);
 	}
